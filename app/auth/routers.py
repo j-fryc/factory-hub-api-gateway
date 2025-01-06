@@ -21,11 +21,11 @@ async def login(request: Request, oauth_service: OAuthManager = Depends(get_oaut
 @router.get("/callback")
 async def callback(request: Request, oauth_service: OAuthManager = Depends(get_oauth_service)):
     try:
-        id_token = await oauth_service.get_access_token(request)
+        access_token = await oauth_service.get_access_token(request)
         response = RedirectResponse(url='/login-status')
         response.set_cookie(
             key="token_cookie",
-            value=id_token,
+            value=access_token,
             httponly=True,
             secure=True,
             samesite="lax"
