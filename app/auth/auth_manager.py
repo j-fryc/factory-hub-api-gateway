@@ -3,26 +3,10 @@ from authlib.jose import jwt
 from authlib.jose.errors import JoseError
 from fastapi import Response, Request
 from starlette.responses import RedirectResponse
-from tenacity import retry, stop_after_attempt, retry_if_exception_type, wait_fixed
 
+from app.auth.auth_exceptions import TokenMissingException, TokenExpiredException, OAuthServiceUnavailableException
 from app.auth.auth_token_verifier import TokenVerifier, TokenVerifierException
 from app.config import Settings
-
-
-class OAuthManagerException(Exception):
-    pass
-
-
-class OAuthServiceUnavailableException(OAuthManagerException):
-    pass
-
-
-class TokenExpiredException(OAuthManagerException):
-    pass
-
-
-class TokenMissingException(OAuthManagerException):
-    pass
 
 
 class OAuthManager:
@@ -31,11 +15,6 @@ class OAuthManager:
         self.oauth = oauth_service
         self._token_verifier = TokenVerifier(domain=self.settings.auth0_domain)
 
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_fixed(2),
-        retry=retry_if_exception_type(OAuthError)
-    )
     def register_oauth(self):
         try:
             self.oauth.register(
@@ -44,6 +23,9 @@ class OAuthManager:
                 client_secret=self.settings.auth0_client_secret,
                 client_kwargs={
                     "scope": "openid profile email",
+                },
+                authorize_params={
+                    "audience": self.settings.auth0_audience,
                 },
                 server_metadata_url=f"https://{self.settings.auth0_domain}/.well-known/openid-configuration",
             )
@@ -57,7 +39,13 @@ class OAuthManager:
 
         try:
             jwks = await self._token_verifier.get_jwks()
-            claims = jwt.decode(token_cookie, jwks)
+            claims = jwt.decode(
+                token_cookie,
+                jwks,
+                claims_options={
+                    'aud': {'essential': True, 'values': [self.settings.auth0_audience]}
+                }
+            )
             claims.validate()
             return True
         except TokenVerifierException as e:
@@ -73,31 +61,24 @@ class OAuthManager:
         response.delete_cookie(key="token_cookie")
         return response
 
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_fixed(2),
-        retry=retry_if_exception_type(OAuthError)
-    )
-    async def get_id_token(self, request: Request) -> str:
+    async def get_access_token(self, request: Request) -> str:
         try:
             token = await self.oauth.auth0.authorize_access_token(request)
-            id_token = token.get("id_token")
+            access_token = token.get("access_token")
 
-            if not id_token:
+            if not access_token:
                 raise TokenMissingException("Access token not found")
-            return id_token
+            return access_token
         except OAuthError as e:
             raise OAuthServiceUnavailableException(f"Error fetching ID token: {e}")
 
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_fixed(2),
-        retry=retry_if_exception_type(OAuthError)
-    )
     async def authorize_access(self, request: Request) -> RedirectResponse:
         try:
             redirect_uri = request.url_for("callback")
-            return await self.oauth.auth0.authorize_redirect(request, redirect_uri)
+            return await self.oauth.auth0.authorize_redirect(
+                request,
+                redirect_uri,
+            )
         except OAuthError as e:
             raise OAuthServiceUnavailableException(f"OAuth error during redirect: {e}")
 

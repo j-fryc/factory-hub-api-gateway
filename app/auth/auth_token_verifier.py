@@ -1,20 +1,12 @@
 import httpx
-from tenacity import retry, stop_after_attempt, retry_if_exception_type, wait_fixed
 
-
-class TokenVerifierException(Exception):
-    pass
+from app.auth.auth_exceptions import TokenVerifierException
 
 
 class TokenVerifier:
     def __init__(self, domain: str):
         self.jwks_url = f"https://{domain}/.well-known/jwks.json"
 
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_fixed(2),
-        retry=retry_if_exception_type((httpx.RequestError, httpx.HTTPStatusError))
-    )
     async def get_jwks(self):
         try:
             async with httpx.AsyncClient() as client:
