@@ -1,7 +1,9 @@
+from urllib.parse import quote_plus, urlencode
+
 from authlib.integrations.starlette_client import OAuth, OAuthError
 from authlib.jose import jwt
 from authlib.jose.errors import JoseError
-from fastapi import Response, Request
+from fastapi import Request
 from starlette.responses import RedirectResponse
 
 from app.auth.auth_exceptions import TokenMissingException, TokenExpiredException, OAuthServiceUnavailableException
@@ -53,13 +55,13 @@ class OAuthManager:
         except JoseError as e:
             raise TokenExpiredException(f"Invalid or expired token: {e}")
 
-    def remove_token_cookie(self, request: Request, response: Response) -> Response:
-        token_cookie = request.cookies.get("token_cookie")
-        if not token_cookie:
-            return response
-
-        response.delete_cookie(key="token_cookie")
-        return response
+    def prepare_logout_url(self, request: Request) -> str:
+        return_to = request.url_for("login_status")
+        logout_url = f"https://{self.settings.auth0_domain}/v2/logout?" + urlencode(
+            {"returnTo": return_to, "client_id": self.settings.auth0_client_id},
+            quote_via=quote_plus
+        )
+        return logout_url
 
     async def get_access_token(self, request: Request) -> str:
         try:
