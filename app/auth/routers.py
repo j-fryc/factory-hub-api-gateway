@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request, HTTPException, Response
+from fastapi import APIRouter, Depends, Request, HTTPException
 from starlette.responses import RedirectResponse
 
 from app.auth.auth_manager import OAuthManager, get_oauth_service, OAuthServiceUnavailableException, \
@@ -60,4 +60,4 @@ async def login_status(request: Request, oauth_service: OAuthManager = Depends(g
             detail=f"Token verification failed: {e}",
         )
     except (TokenExpiredException, TokenMissingException):
-        return RedirectResponse(url='/login')
+        raise HTTPException(status_code=401, detail="Unauthorized")

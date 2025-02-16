@@ -34,7 +34,7 @@ class OAuthManager:
         except OAuthError as e:
             raise OAuthServiceUnavailableException(f"Failed to register OAuth: {e}")
 
-    async def verify_token(self, request: Request) -> bool:
+    async def verify_token(self, request: Request) -> dict:
         token_cookie = request.cookies.get("token_cookie")
         if not token_cookie:
             raise TokenMissingException("Token not provided")
@@ -49,7 +49,7 @@ class OAuthManager:
                 }
             )
             claims.validate()
-            return True
+            return claims
         except TokenVerifierException as e:
             raise OAuthServiceUnavailableException(f"Error requesting oauth service: {e}")
         except JoseError as e:

@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  fastapi_app:
+    build: .
+    container_name: fastapi_container
+    ports:
+      - "8000:8000"
+    networks:
+      - factory_hub_network
+    env_file:
+      - .env
+    volumes:
+      - ./app:/app
+    restart: always
+
+networks:
+  factory_hub_network:
+    external: true
