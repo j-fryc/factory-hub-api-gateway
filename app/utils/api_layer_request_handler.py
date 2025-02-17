@@ -10,7 +10,7 @@ from app.utils.request_exceptions import (
 )
 
 
-class RequestHandler:
+class ApiLayerRequestHandler:
     def __init__(self):
         self._headers = {
             'Accept': 'application/json',

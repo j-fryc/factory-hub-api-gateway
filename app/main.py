@@ -7,8 +7,8 @@ from app.auth.routers import router as auth_router
 from app.user_management.organizations.routers import router as organization_management_router
 from app.user_management.roles.routers import router as role_management_router
 from app.user_management.users.routers import router as user_management_router
-from app.utils.request_handler import RequestHandler
 from .roles_handler.roles_manager import RolesManager
+from .user_management.roles.roles_service_manager import RolesServiceManager
 
 app = FastAPI()
 
@@ -33,10 +33,12 @@ async def startup():
         settings=get_settings(),
         auth_manager_service=oauth_manager
     )
-    request_handler = RequestHandler()
+    roles_service_manager = RolesServiceManager(
+        settings=get_settings()
+    )
     app.state.oauth_service = oauth_manager
     app.state.roles_manager = roles_manager
-    app.state.request_handler = request_handler
+    app.state.roles_service_manager = roles_service_manager
 
 app.include_router(auth_router)
 app.include_router(user_management_router)

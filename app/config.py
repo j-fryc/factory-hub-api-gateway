@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     auth0_domain: str
     auth0_audience: str
     name_space: str
+    factory_hub_user_mgmt_endpoint: str
 
     model_config = SettingsConfigDict(env_file="../.env")
 
