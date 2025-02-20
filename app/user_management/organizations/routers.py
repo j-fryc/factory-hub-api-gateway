@@ -1,291 +1,164 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 
-from app.roles_handler.roles_manager import verify_current_user
 from app.roles_handler.roles_schema import ApplicationRoles, OrganisationRoles
-from app.user_management.organizations.schemas import SortParameters, CreateOrganizationFields, \
-    UpdateOrganizationFields, AddDeleteMembersFields
+from app.user_management.organizations.schemas import AddDeleteMembersFields, OrganisationSortParameters, \
+    CreateOrganizationFields, UpdateOrganizationFields
 from app.user_management.roles.schemas import UserRolesFields
-from app.utils.request_exceptions import BadRequestException, ServiceUnavailableException, BaseApiException
-from app.utils.request_handler import get_request_handler, RequestHandler
-
+from app.utils.dependencies import GetOrganisationsServiceManager, UserRoles
 
 router = APIRouter(prefix="/api/v1/organizations")
 
 
 @router.get("/")
 async def get_organizations(
-        user_role: dict = Depends(verify_current_user(
-            [
-                ApplicationRoles.APPLICATION_ADMIN.value,
-                OrganisationRoles.ORGANISATION_ADMIN.value
-            ]
-        )),
-        sort_parameter: SortParameters = Depends(),
-        request_handler: RequestHandler = Depends(get_request_handler)
+        query_parameters: OrganisationSortParameters,
+        organisations_service_manager: GetOrganisationsServiceManager,
+        user_role: UserRoles[[
+            ApplicationRoles.APPLICATION_ADMIN.value,
+            OrganisationRoles.ORGANISATION_ADMIN.value
+        ]]
 ):
-    try:
-        organization_info = await request_handler.make_request(
-            method="GET",
-            endpoint='http://host.docker.internal:8001/api/v1/organizations/',
-            params=sort_parameter.dict(exclude_none=True)
-        )
-        return JSONResponse(content=organization_info)
-    except BadRequestException as e:
-        raise HTTPException(
-            status_code=400,
-            detail=str(e)
-        )
-    except (ServiceUnavailableException, BaseApiException):
-        raise HTTPException(
-            status_code=500,
-            detail="Service unavailable"
-        )
+    organisations_info = await organisations_service_manager.get_organizations(sort_parameter=query_parameters)
+    json_compatible_data = jsonable_encoder(organisations_info)
+    return JSONResponse(content=json_compatible_data)
 
 
 @router.post("/")
 async def create_organizations(
-        user_role: dict = Depends(verify_current_user(
-            [
-                ApplicationRoles.APPLICATION_ADMIN.value,
-            ]
-        )),
-        create_organization_parameter: CreateOrganizationFields = Depends(),
-        request_handler: RequestHandler = Depends(get_request_handler)
+        organisations_service_manager: GetOrganisationsServiceManager,
+        query_parameters: CreateOrganizationFields,
+        user_role: UserRoles[
+            ApplicationRoles.APPLICATION_ADMIN.value
+        ]
 ):
-    try:
-        organization_info = await request_handler.make_request(
-            method="POST",
-            endpoint='http://host.docker.internal:8001/api/v1/organizations/',
-            content=create_organization_parameter.model_dump_json(exclude_none=True)
-        )
-        return JSONResponse(content=organization_info)
-    except BadRequestException as e:
-        raise HTTPException(
-            status_code=400,
-            detail=str(e)
-        )
-    except (ServiceUnavailableException, BaseApiException):
-        raise HTTPException(
-            status_code=500,
-            detail="Service unavailable"
-        )
+    created_organisation = await organisations_service_manager.create_organization(
+        create_organization_parameter=query_parameters
+    )
+    json_compatible_data = jsonable_encoder(created_organisation)
+    return JSONResponse(content=json_compatible_data)
 
 
 @router.patch("/{organization_id}")
 async def update_organizations(
+        organisations_service_manager: GetOrganisationsServiceManager,
+        query_parameters: UpdateOrganizationFields,
         organization_id: str,
-        user_role: dict = Depends(verify_current_user(
-            [
+        user_role: UserRoles[[
                 ApplicationRoles.APPLICATION_ADMIN.value,
-                OrganisationRoles.ORGANISATION_ADMIN.value
-            ]
-        )),
-        update_organization_parameter: UpdateOrganizationFields = Depends(),
-        request_handler: RequestHandler = Depends(get_request_handler)
+                OrganisationRoles.ORGANISATION_ADMIN.value,
+            ]],
 ):
-    try:
-        organization_info = await request_handler.make_request(
-            method="PATCH",
-            endpoint=f'http://host.docker.internal:8001/api/v1/organizations/{organization_id}',
-            content=update_organization_parameter.model_dump_json(exclude_none=True)
-        )
-        return JSONResponse(content=organization_info)
-    except BadRequestException as e:
-        raise HTTPException(
-            status_code=400,
-            detail=str(e)
-        )
-    except (ServiceUnavailableException, BaseApiException):
-        raise HTTPException(
-            status_code=500,
-            detail="Service unavailable"
-        )
+    updated_organisation = await organisations_service_manager.update_organization(
+        organization_id=organization_id,
+        update_organization_parameter=query_parameters,
+    )
+    json_compatible_data = jsonable_encoder(updated_organisation)
+    return JSONResponse(content=json_compatible_data)
 
 
 @router.delete("/{organization_id}")
 async def delete_organization(
+        organisations_service_manager: GetOrganisationsServiceManager,
         organization_id: str,
-        user_role: dict = Depends(verify_current_user(
-            [
+        user_role: UserRoles[[
                 ApplicationRoles.APPLICATION_ADMIN.value,
-                OrganisationRoles.ORGANISATION_ADMIN.value
-            ]
-        )),
-        request_handler: RequestHandler = Depends(get_request_handler)
+                OrganisationRoles.ORGANISATION_ADMIN.value,
+            ]],
 ):
-    try:
-        organization_info = await request_handler.make_request(
-            method="DELETE",
-            endpoint=f'http://host.docker.internal:8001/api/v1/organizations/{organization_id}'
-        )
-        return JSONResponse(content=organization_info)
-    except BadRequestException as e:
-        raise HTTPException(
-            status_code=400,
-            detail=str(e)
-        )
-    except (ServiceUnavailableException, BaseApiException):
-        raise HTTPException(
-            status_code=500,
-            detail="Service unavailable"
-        )
+    await organisations_service_manager.delete_organization(organization_id=organization_id)
+    return JSONResponse(status_code=204, content='Resource deleted successfully')
 
 
 @router.post("/{organization_id}/members")
 async def add_users_to_organization(
+        organisations_service_manager: GetOrganisationsServiceManager,
         organization_id: str,
         members_list: AddDeleteMembersFields,
-        user_role: dict = Depends(verify_current_user(
-            [
-                ApplicationRoles.APPLICATION_ADMIN.value,
-                OrganisationRoles.ORGANISATION_ADMIN.value,
-                OrganisationRoles.ORGANISATION_MANAGER.value,
-            ]
-        )),
-        request_handler: RequestHandler = Depends(get_request_handler)
+        user_role: UserRoles[[
+            ApplicationRoles.APPLICATION_ADMIN.value,
+            OrganisationRoles.ORGANISATION_ADMIN.value,
+            OrganisationRoles.ORGANISATION_MANAGER.value,
+        ]]
 ):
-    try:
-        organization_info = await request_handler.make_request(
-            method="POST",
-            endpoint=f'http://host.docker.internal:8001/api/v1/organizations/{organization_id}/members',
-            content=members_list.model_dump_json(exclude_none=True)
-        )
-        return JSONResponse(content=organization_info)
-    except BadRequestException as e:
-        raise HTTPException(
-            status_code=400,
-            detail=str(e)
-        )
-    except (ServiceUnavailableException, BaseApiException):
-        raise HTTPException(
-            status_code=500,
-            detail="Service unavailable"
-        )
+    await organisations_service_manager.add_users_to_organization(
+        organization_id=organization_id,
+        members_list=members_list
+    )
+    return JSONResponse(status_code=201, content='Resource added successfully')
 
 
 @router.delete("/{organization_id}/members")
 async def delete_users_from_organization(
+        organisations_service_manager: GetOrganisationsServiceManager,
         organization_id: str,
         members_list: AddDeleteMembersFields,
-        user_role: dict = Depends(verify_current_user(
-            [
-                ApplicationRoles.APPLICATION_ADMIN.value,
-                OrganisationRoles.ORGANISATION_ADMIN.value,
-                OrganisationRoles.ORGANISATION_MANAGER.value,
-            ]
-        )),
-        request_handler: RequestHandler = Depends(get_request_handler)
+        user_role: UserRoles[[
+            ApplicationRoles.APPLICATION_ADMIN.value,
+            OrganisationRoles.ORGANISATION_ADMIN.value,
+            OrganisationRoles.ORGANISATION_MANAGER.value,
+        ]]
 ):
-    try:
-        organization_info = await request_handler.make_request(
-            method="DELETE",
-            endpoint=f'http://host.docker.internal:8001/api/v1/organizations/{organization_id}/members',
-            content=members_list.model_dump_json(exclude_none=True)
-        )
-        return JSONResponse(content=organization_info)
-    except BadRequestException as e:
-        raise HTTPException(
-            status_code=400,
-            detail=str(e)
-        )
-    except (ServiceUnavailableException, BaseApiException):
-        raise HTTPException(
-            status_code=500,
-            detail="Service unavailable"
-        )
+    await organisations_service_manager.delete_users_from_organization(
+        organization_id=organization_id,
+        members_list=members_list
+    )
+    return JSONResponse(status_code=204, content='Resource deleted successfully')
 
 
 @router.get("/{organization_id}/members/{user_id}/roles")
 async def get_organization_roles(
+        organisations_service_manager: GetOrganisationsServiceManager,
         organization_id: str,
         user_id: str,
-        user_role: dict = Depends(verify_current_user(
-            [
-                ApplicationRoles.APPLICATION_ADMIN.value,
-                OrganisationRoles.ORGANISATION_ADMIN.value,
-                OrganisationRoles.ORGANISATION_MANAGER.value,
-            ]
-        )),
-        request_handler: RequestHandler = Depends(get_request_handler)
+        user_role: UserRoles[[
+            ApplicationRoles.APPLICATION_ADMIN.value,
+            OrganisationRoles.ORGANISATION_ADMIN.value,
+            OrganisationRoles.ORGANISATION_MANAGER.value,
+        ]]
 ):
-    try:
-        organization_info = await request_handler.make_request(
-            method="GET",
-            endpoint=f'http://host.docker.internal:8001/api/v1/organizations/{organization_id}/members/{user_id}/roles',
-        )
-        return JSONResponse(content=organization_info)
-    except BadRequestException as e:
-        raise HTTPException(
-            status_code=400,
-            detail=str(e)
-        )
-    except (ServiceUnavailableException, BaseApiException):
-        raise HTTPException(
-            status_code=500,
-            detail="Service unavailable"
-        )
+    user_organisation_roles = await organisations_service_manager.get_user_roles_in_organization(
+        organization_id=organization_id,
+        user_id=user_id
+    )
+    json_compatible_data = jsonable_encoder(user_organisation_roles)
+    return JSONResponse(content=json_compatible_data)
 
 
 @router.delete("/{organization_id}/members/{user_id}/roles")
 async def delete_users_roles_from_organization_member(
+        organisations_service_manager: GetOrganisationsServiceManager,
         organization_id: str,
         user_id: str,
         members_roles_fields: UserRolesFields,
-        user_role: dict = Depends(verify_current_user(
-            [
+        user_role: UserRoles[[
                 ApplicationRoles.APPLICATION_ADMIN.value,
                 OrganisationRoles.ORGANISATION_ADMIN.value,
-            ]
-        )),
-        request_handler: RequestHandler = Depends(get_request_handler)
+            ]],
 ):
-    try:
-        organization_info = await request_handler.make_request(
-            method="DELETE",
-            endpoint=f'http://host.docker.internal:8001/api/v1/organizations/{organization_id}/members/{user_id}/roles',
-            content=members_roles_fields.model_dump_json(exclude_none=True)
-        )
-        return JSONResponse(content=organization_info)
-    except BadRequestException as e:
-        raise HTTPException(
-            status_code=400,
-            detail=str(e)
-        )
-    except (ServiceUnavailableException, BaseApiException):
-        raise HTTPException(
-            status_code=500,
-            detail="Service unavailable"
-        )
+    await organisations_service_manager.delete_user_roles_in_organization(
+        organization_id=organization_id,
+        user_id=user_id,
+        members_roles_fields=members_roles_fields
+    )
+    return JSONResponse(status_code=204, content='Resource deleted successfully')
 
 
 @router.post("/{organization_id}/members/{user_id}/roles")
 async def assign_user_roles_in_organization(
+        organisations_service_manager: GetOrganisationsServiceManager,
         organization_id: str,
         user_id: str,
         members_roles_fields: UserRolesFields,
-        user_role: dict = Depends(verify_current_user(
-            [
+        user_role: UserRoles[[
                 ApplicationRoles.APPLICATION_ADMIN.value,
                 OrganisationRoles.ORGANISATION_ADMIN.value,
-            ]
-        )),
-        request_handler: RequestHandler = Depends(get_request_handler)
+            ]],
 ):
-    try:
-        organization_info = await request_handler.make_request(
-            method="POST",
-            endpoint=f'http://host.docker.internal:8001/api/v1/organizations/{organization_id}/members/{user_id}/roles',
-            content=members_roles_fields.model_dump_json(exclude_none=True)
-        )
-        return JSONResponse(content=organization_info)
-    except BadRequestException as e:
-        raise HTTPException(
-            status_code=400,
-            detail=str(e)
-        )
-    except (ServiceUnavailableException, BaseApiException):
-        raise HTTPException(
-            status_code=500,
-            detail="Service unavailable"
-        )
+    await organisations_service_manager.assign_user_roles_in_organization(
+        organization_id=organization_id,
+        user_id=user_id,
+        members_roles_fields=members_roles_fields
+    )
+    return JSONResponse(status_code=201, content='Resource successfully updated')
