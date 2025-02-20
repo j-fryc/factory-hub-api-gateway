@@ -20,7 +20,6 @@ class OrganizationManager(BaseManager):
             self,
             sort_parameter: OrganisationSortParameters
     ) -> List[OrganizationFields]:
-        print("@@@@@@@@@@@@@@@@ sobie dzialam", flush=True)
         organizations_data = await self._send_request(
             method="GET",
             endpoint=self._api_endpoint,

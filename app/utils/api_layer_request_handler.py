@@ -31,12 +31,6 @@ class ApiLayerRequestHandler:
     ) -> Dict | None:
         async with httpx.AsyncClient() as client:
             try:
-                print("@@@@@@@@@@@@@@@@@@@", flush=True)
-                print(endpoint, flush=True)
-                print(params, flush=True)
-                print(content, flush=True)
-                print(method, flush=True)
-                print("@@@@@@@@@@@@@@@@@@@", flush=True)
                 response = await client.request(
                     method=method,
                     url=endpoint,
