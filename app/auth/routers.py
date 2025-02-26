@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request, Response, HTTPException
+from fastapi import APIRouter, Depends, Request, HTTPException
 from starlette.responses import RedirectResponse
 
 from app.auth.auth_manager import OAuthManager, get_oauth_service, OAuthServiceUnavailableException, \
@@ -41,9 +41,12 @@ async def callback(request: Request, oauth_service: OAuthManager = Depends(get_o
 
 
 @router.get("/logout")
-def logout(request: Request, response: Response, oauth_service: OAuthManager = Depends(get_oauth_service)):
-    oauth_service.remove_token_cookie(request=request, response=response)
-    return {"status": "logged out"}
+def logout(request: Request, oauth_service: OAuthManager = Depends(get_oauth_service)):
+    request.session.clear()
+    logout_url = oauth_service.prepare_logout_url(request=request)
+    redirect_response = RedirectResponse(url=logout_url)
+    redirect_response.delete_cookie("token_cookie")
+    return redirect_response
 
 
 @router.get("/login-status")
@@ -57,4 +60,4 @@ async def login_status(request: Request, oauth_service: OAuthManager = Depends(g
             detail=f"Token verification failed: {e}",
         )
     except (TokenExpiredException, TokenMissingException):
-        return RedirectResponse(url='/login')
+        raise HTTPException(status_code=401, detail="Unauthorized")

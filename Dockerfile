@@ -1,7 +1,10 @@
 FROM python:3.12-alpine
 ENV PYTHONUNBUFFERED=1
-COPY requirements.txt entry_point_fastapi.sh .env ./
+
+COPY requirements.txt entry_point_fastapi.sh ./
 RUN pip install --no-cache-dir -r requirements.txt
+
 COPY ./app /app
+
 EXPOSE 8000
 ENTRYPOINT ["/bin/sh", "entry_point_fastapi.sh"]
